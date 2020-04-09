@@ -1,44 +1,50 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"log"
+	"os"
 
-	proto "github.com/locpham24/go-authentication/proto"
-	"github.com/micro/go-micro/v2"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/mysql"
+	"github.com/joho/godotenv"
+	"github.com/locpham24/go-authentication/cmd"
+	"github.com/micro/cli/v2"
 )
 
-/*
-
-Example usage of top level service initialisation
-
-*/
-
-type Greeter struct{}
-
-func (g *Greeter) Hello(ctx context.Context, req *proto.Request, rsp *proto.Response) error {
-	rsp.Greeting = "Hello " + req.Name
-	return nil
-}
-
 func main() {
-	// Create a new service. Optionally include some options here.
-	service := micro.NewService(micro.Name("greeter"))
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
-	// Init will parse the command line flags. Any flags set will
-	// override the above settings. Options defined here will
-	// override anything set on the command line.
-	service.Init()
+	app := &cli.App{
+		Name:  "auth",
+		Usage: "Go Authentication Service",
+		Action: func(c *cli.Context) error {
+			fmt.Println("Welcome to Go Authentication Service")
+			return nil
+		},
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "database",
+				Aliases: []string{"db", "d"},
+				EnvVars: []string{"DB_URI"},
+			},
+		},
+		Before: func(c *cli.Context) error {
+			db, err := gorm.Open("mysql", c.String("database"))
+			if err != nil {
+				panic(err)
+			}
+			c.App.Metadata["db"] = db
+			return nil
+		},
+		Commands: []*cli.Command{&cmd.Migrate, &cmd.Start},
+	}
 
-	// By default we'll run the server unless the flags catch us
-
-	// Setup the server
-
-	// Register handler
-	proto.RegisterGreeterHandler(service.Server(), new(Greeter))
-
-	// Run the server
-	if err := service.Run(); err != nil {
-		fmt.Println(err)
+	err = app.Run(os.Args)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
