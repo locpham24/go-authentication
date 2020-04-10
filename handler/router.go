@@ -12,4 +12,12 @@ func InitRouter(r *gin.Engine, db *gorm.DB) {
 		DB:     db,
 	}
 	authHandler.inject()
+
+	user := &UserHandler{
+		Engine: r,
+		DB:     db,
+	}
+
+	user.inject()
+
 }
