@@ -17,7 +17,11 @@ func InitRouter(r *gin.Engine, db *gorm.DB) {
 		Engine: r,
 		DB:     db,
 	}
-
 	user.inject()
 
+	// Inject health check handler
+	healthCheckHandler := &HealthCheckHandler{
+		Engine: r,
+	}
+	healthCheckHandler.inject()
 }

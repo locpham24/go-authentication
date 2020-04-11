@@ -16,16 +16,8 @@ type AuthHandler struct {
 }
 
 func (a AuthHandler) inject() {
-	a.Engine.GET("/ping", a.ping)
-	a.Engine.POST("/user/register", a.register)
-	a.Engine.POST("/user/login", a.login)
-}
-
-func (a AuthHandler) ping(c *gin.Context) {
-	c.JSON(200, gin.H{
-		"code":    0,
-		"message": "pong",
-	})
+	a.Engine.POST("/register", a.register)
+	a.Engine.POST("/login", a.login)
 }
 
 func (a AuthHandler) register(c *gin.Context) {
