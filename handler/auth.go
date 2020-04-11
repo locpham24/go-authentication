@@ -5,8 +5,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/locpham24/go-authentication/model"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -18,6 +20,7 @@ type AuthHandler struct {
 func (a AuthHandler) inject() {
 	a.Engine.POST("/register", a.register)
 	a.Engine.POST("/login", a.login)
+	a.Engine.GET("/refresh", a.refresh)
 }
 
 func (a AuthHandler) register(c *gin.Context) {
@@ -30,14 +33,24 @@ func (a AuthHandler) register(c *gin.Context) {
 		return
 	}
 
+	pass, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    2000,
+			"message": err.Error(),
+		})
+	}
+
+	input.Password = string(pass)
+
 	user := model.User{}
 	user.Fill(input)
 
 	// Check if user is existed
 	var count int8
-	err := a.DB.Model(&model.User{}).Where("username = ?", user.Username).Count(&count).Error
+	err = a.DB.Model(&model.User{}).Where("username = ?", user.Username).Count(&count).Error
 	if err != nil {
-		c.JSON(404, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    2000,
 			"message": err.Error(),
 		})
@@ -46,7 +59,7 @@ func (a AuthHandler) register(c *gin.Context) {
 
 	// username is existed
 	if count > 0 {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    2000,
 			"message": "username is existed",
 		})
@@ -56,7 +69,7 @@ func (a AuthHandler) register(c *gin.Context) {
 	// Add user to database
 	err = a.DB.Create(&user).Error
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    2000,
 			"message": err.Error(),
 		})
@@ -93,8 +106,9 @@ func (a AuthHandler) login(c *gin.Context) {
 		return
 	}
 
-	// 3. check if password correct
-	if input.Password != user.Password {
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password))
+
+	if err != nil && err == bcrypt.ErrMismatchedHashAndPassword { //Password does not match!
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code":    2000,
 			"message": "Invalid password",
@@ -102,8 +116,8 @@ func (a AuthHandler) login(c *gin.Context) {
 		return
 	}
 
-	// 4. create JWT token with expired time in 24h
-	expirationTime := time.Now().Add(24 * time.Hour)
+	tokenTTL, _ := strconv.Atoi(os.Getenv("TOKEN_TTL"))
+	expirationTime := time.Now().Add(time.Duration(tokenTTL) * time.Minute)
 	claims := &model.Claims{
 		Username: input.Username,
 		StandardClaims: jwt.StandardClaims{
@@ -122,4 +136,69 @@ func (a AuthHandler) login(c *gin.Context) {
 	}
 
 	c.JSON(200, tokenString)
+}
+
+func (a AuthHandler) refresh(c *gin.Context) {
+	tokenString := c.Request.Header.Get("authorization")
+	if tokenString == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "user needs to be signed in to access this service",
+		})
+		c.Abort()
+		return
+	}
+
+	// 2. Validate token
+	token, err := jwt.ParseWithClaims(tokenString, &model.Claims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(os.Getenv("SECRET_KEY")), nil
+	})
+	if err != nil {
+		if err == jwt.ErrSignatureInvalid {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    401,
+				"message": err.Error(),
+			})
+		}
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    401,
+			"message": err.Error(),
+		})
+		return
+	}
+	if !token.Valid {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    401,
+			"message": "token is invalid",
+		})
+		return
+	}
+
+	if claims, ok := token.Claims.(*model.Claims); ok {
+		if time.Unix(claims.ExpiresAt, 0).Sub(time.Now()) > 240*time.Second {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    401,
+				"message": "too soon to refresh token",
+			})
+			return
+		}
+
+		tokenTTL, _ := strconv.Atoi(os.Getenv("TOKEN_TTL"))
+
+		expirationTime := time.Now().Add(time.Duration(tokenTTL) * time.Minute)
+		claims.ExpiresAt = expirationTime.Unix()
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    401,
+				"message": err.Error(),
+			})
+			return
+		}
+		c.JSON(200, tokenString)
+		return
+	}
+
+	c.JSON(200, nil)
 }

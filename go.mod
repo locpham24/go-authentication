@@ -11,4 +11,5 @@ require (
 	github.com/micro/cli/v2 v2.1.2
 	github.com/micro/go-micro/v2 v2.4.0
 	github.com/urfave/cli/v2 v2.2.0
+	golang.org/x/crypto v0.0.0-20200221231518-2aa609cf4a9d
 )
