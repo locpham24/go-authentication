@@ -11,7 +11,7 @@ type User struct {
 }
 
 type UserForm struct {
-	Username string `json:"username" validate:"required" binding:"required,alphanum,min=4,max=255"`
+	Username string `json:"username" validate:"required" binding:"required,min=4,max=255"`
 	Password string `json:"password" validate:"required" binding:"required,min=8,max=255"`
 }
 
