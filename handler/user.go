@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/locpham24/go-authentication/middleware"
@@ -29,8 +28,6 @@ func (u UserHandler) get(c *gin.Context) {
 		})
 	}
 	user := model.User{}
-
-	fmt.Println("hello")
 
 	err = u.DB.First(&user, id).Error
 	if err != nil {
