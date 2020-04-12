@@ -40,7 +40,7 @@ func main() {
 			c.App.Metadata["db"] = db
 			return nil
 		},
-		Commands: []*cli.Command{&cmd.Migrate, &cmd.Start},
+		Commands: []*cli.Command{&cmd.Migrate, &cmd.Server, &cmd.Client},
 	}
 
 	err = app.Run(os.Args)

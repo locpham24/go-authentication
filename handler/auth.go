@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/locpham24/go-authentication/model"
+	pb "github.com/locpham24/go-authentication/proto"
 	"github.com/locpham24/go-authentication/validator"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
@@ -16,6 +18,7 @@ import (
 type AuthHandler struct {
 	Engine *gin.Engine
 	DB     *gorm.DB
+	client pb.AuthServiceClient
 }
 
 func (a AuthHandler) inject() {
@@ -31,7 +34,12 @@ func (a AuthHandler) register(c *gin.Context) {
 		return
 	}
 
-	pass, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	req := pb.RegisterReq{
+		Username: input.Username,
+		Password: input.Password,
+	}
+	res, err := a.client.Register(context.TODO(), &req)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    2000,
@@ -39,14 +47,16 @@ func (a AuthHandler) register(c *gin.Context) {
 		})
 	}
 
-	input.Password = string(pass)
+	if res == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    2000,
+			"message": "Can not create",
+		})
+	}
 
 	user := model.User{}
-	user.Fill(input)
-
 	// Check if user is existed
-	var count int8
-	err = a.DB.Model(&model.User{}).Where("username = ?", user.Username).Count(&count).Error
+	err = a.DB.Model(&model.User{}).First(&user, res.Id).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    2000,
@@ -54,27 +64,6 @@ func (a AuthHandler) register(c *gin.Context) {
 		})
 		return
 	}
-
-	// username is existed
-	if count > 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":    2000,
-			"message": "username is existed",
-		})
-		return
-	}
-
-	// Add user to database
-	err = a.DB.Create(&user).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    2000,
-			"message": err.Error(),
-		})
-		return
-	}
-
-	// generate token
 
 	// response
 	c.JSON(200, user)

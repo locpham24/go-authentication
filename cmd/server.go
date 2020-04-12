@@ -6,13 +6,13 @@ import (
 	"github.com/micro/cli/v2"
 )
 
-var Start = cli.Command{
-	Name:  "start",
-	Usage: "Start the application",
+var Server = cli.Command{
+	Name:  "server",
+	Usage: "Start the server",
 	Action: func(c *cli.Context) error {
 		db := c.App.Metadata["db"].(*gorm.DB)
-		apiSvc := service.NewAPIService(db)
-		apiSvc.Start()
+		authSvc := service.NewAuthService(db)
+		authSvc.Start()
 		return nil
 	},
 }

@@ -4,9 +4,10 @@ package proto;
 
 import "google/protobuf/timestamp.proto";
 
-service UserService {
+service AuthService {
     rpc Login(LoginReq) returns (LoginRes){};
-    rpc Register(RegisterReq) returns (RegisterRes){};
+    rpc Register(RegisterReq) returns (User){};
+    rpc Verify(AccessToken) returns (User){};
 }
 
 message User {
