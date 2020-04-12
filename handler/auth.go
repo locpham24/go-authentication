@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/locpham24/go-authentication/model"
+	"github.com/locpham24/go-authentication/validator"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"os"
@@ -26,10 +27,7 @@ func (a AuthHandler) inject() {
 func (a AuthHandler) register(c *gin.Context) {
 	input := model.UserForm{}
 	if err := c.BindJSON(&input); err != nil {
-		c.JSON(400, gin.H{
-			"code":    1000,
-			"message": err.Error(),
-		})
+		validator.HandleErrors(c, err)
 		return
 	}
 
@@ -86,10 +84,7 @@ func (a AuthHandler) login(c *gin.Context) {
 	// 1. get user info from request
 	input := model.UserForm{}
 	if err := c.BindJSON(&input); err != nil {
-		c.JSON(400, gin.H{
-			"code":    1000,
-			"message": err.Error(),
-		})
+		validator.HandleErrors(c, err)
 		return
 	}
 
