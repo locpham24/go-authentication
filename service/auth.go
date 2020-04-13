@@ -8,6 +8,8 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/micro/cli/v2"
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/grpc/credentials"
+	"log"
 	"net"
 	"os"
 	"strconv"
@@ -128,14 +130,26 @@ func (a authService) Start(ctx *cli.Context) {
 		port = "7000"
 	}
 	// 1. Listen/Open a TPC connect at port
-	listen, _ := net.Listen("tcp", ":"+port)
+	listen, err := net.Listen("tcp", "ssl.local:"+port)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	certFile := "ssl.local.crt"
+	keyFile := "ssl.local.key"
+
+	creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+	if err != nil {
+		log.Fatalf("Failed to generate credentials %v", err)
+	}
+
 	// 2. Tao server tu GRP
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(grpc.Creds(creds))
 	// 3. Map service to server
 	pb.RegisterAuthServiceServer(grpcServer, &authService{
 		DB: a.DB,
 	})
 
-	fmt.Printf("Starting gRPC server at :%s .....", port)
+	fmt.Printf("Starting gRPC server at ssl.local:%s .....", port)
 	grpcServer.Serve(listen)
 }

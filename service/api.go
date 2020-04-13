@@ -10,6 +10,7 @@ import (
 	"github.com/locpham24/go-authentication/validator"
 	"github.com/micro/cli/v2"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 type APIService struct {
@@ -27,10 +28,23 @@ func (s APIService) Start(ctx *cli.Context) {
 	if port == "" {
 		port = "7000"
 	}
+	certFile := "ssl.local.crt"
 
-	fmt.Printf("Connect to server at :%s\n", port)
+	fmt.Println("certFile:", certFile)
+	// Create the client TLS credentials
+	creds, err := credentials.NewClientTLSFromFile(certFile, "")
+	if err != nil {
+		panic(err.Error())
+	}
+
+	fmt.Printf("Connect to server at ssl.local:%s\n", port)
 	// 1. Connect to server at TCP port
-	conn, _ := grpc.Dial(fmt.Sprintf("localhost:%s", port), grpc.WithInsecure())
+	//conn, err := grpc.Dial(fmt.Sprintf("localhost:%s", port), grpc.WithInsecure())
+	conn, err := grpc.Dial(fmt.Sprintf("ssl.local:%s", port), grpc.WithTransportCredentials(creds))
+	if err != nil {
+		panic(err.Error())
+	}
+
 	// 2. New client
 	client := pb.NewAuthServiceClient(conn)
 
