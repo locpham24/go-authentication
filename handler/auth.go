@@ -8,11 +8,7 @@ import (
 	"github.com/locpham24/go-authentication/model"
 	pb "github.com/locpham24/go-authentication/proto"
 	"github.com/locpham24/go-authentication/validator"
-	"golang.org/x/crypto/bcrypt"
 	"net/http"
-	"os"
-	"strconv"
-	"time"
 )
 
 type AuthHandler struct {
@@ -78,49 +74,27 @@ func (a AuthHandler) login(c *gin.Context) {
 		return
 	}
 
-	user := model.User{}
-	user.Fill(input)
-
-	// 2. verify if user exist
-	err := a.DB.First(&user, "username = ?", user.Username).Error
-	if err != nil {
-		c.JSON(404, gin.H{
-			"code":    2000,
-			"message": err.Error(),
-		})
-		return
-	}
-
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password))
-
-	if err != nil && err == bcrypt.ErrMismatchedHashAndPassword { //Password does not match!
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"code":    2000,
-			"message": "Invalid password",
-		})
-		return
-	}
-
-	tokenTTL, _ := strconv.Atoi(os.Getenv("TOKEN_TTL"))
-	expirationTime := time.Now().Add(time.Duration(tokenTTL) * time.Minute)
-	claims := &model.Claims{
+	req := pb.LoginRequest{
 		Username: input.Username,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(),
-		},
+		Password: input.Password,
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
+	res, err := a.client.Login(context.TODO(), &req)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    1000,
+			"code":    2000,
 			"message": err.Error(),
 		})
-		return
 	}
 
-	c.JSON(200, tokenString)
+	if res == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    2000,
+			"message": "Log in failed. Please try again",
+		})
+	}
+
+	c.JSON(200, res.Token)
 }
 
 func (a AuthHandler) refresh(c *gin.Context) {

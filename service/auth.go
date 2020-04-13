@@ -78,7 +78,46 @@ func (a *authService) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 }
 
 func (a *authService) Login(ctx context.Context, req *pb.LoginRequest) (*pb.AccessToken, error) {
-	return nil, nil
+	input := model.UserForm{
+		Username: req.Username,
+		Password: req.Password,
+	}
+
+	user := model.User{}
+	user.Fill(input)
+
+	// 2. verify if user exist
+	err := a.DB.First(&user, "username = ?", user.Username).Error
+	if err != nil {
+		return nil, err
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password))
+
+	if err != nil && err == bcrypt.ErrMismatchedHashAndPassword { //Password does not match!
+		return nil, err
+	}
+
+	tokenTTL, _ := strconv.Atoi(os.Getenv("TOKEN_TTL"))
+	expirationTime := time.Now().Add(time.Duration(tokenTTL) * time.Minute)
+	claims := &model.Claims{
+		Username: input.Username,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expirationTime.Unix(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.AccessToken{
+		Token: tokenString,
+	}
+
+	return resp, nil
 }
 
 func (a *authService) Verify(ctx context.Context, req *pb.AccessToken) (*pb.User, error) {
