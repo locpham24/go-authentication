@@ -9,10 +9,16 @@ import (
 var Client = cli.Command{
 	Name:  "client",
 	Usage: "Start the client",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:    "port",
+			Aliases: []string{"p"},
+		},
+	},
 	Action: func(c *cli.Context) error {
 		db := c.App.Metadata["db"].(*gorm.DB)
 		apiSvc := service.NewAPIService(db)
-		apiSvc.Start()
+		apiSvc.Start(c)
 		return nil
 	},
 }

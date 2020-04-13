@@ -5,9 +5,10 @@ package proto;
 import "google/protobuf/timestamp.proto";
 
 service AuthService {
-    rpc Login(LoginReq) returns (LoginRes){};
-    rpc Register(RegisterReq) returns (User){};
+    rpc Login(LoginRequest) returns (AccessToken){};
+    rpc Register(RegisterRequest) returns (User){};
     rpc Verify(AccessToken) returns (User){};
+    rpc Refresh(AccessToken) returns (AccessToken){};
 }
 
 message User {
@@ -22,22 +23,12 @@ message AccessToken {
     string token = 1;
 }
 
-message LoginReq {
+message LoginRequest {
     string username = 1;
     string password = 2;
 }
 
-message RegisterReq {
+message RegisterRequest {
     string username = 1;
     string password = 2;
-}
-
-message LoginRes {
-    bool ok = 1;
-    AccessToken data = 2;
-}
-
-message RegisterRes {
-    bool ok = 1;
-    AccessToken data = 2;
 }

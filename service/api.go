@@ -1,12 +1,14 @@
 package service
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/jinzhu/gorm"
 	"github.com/locpham24/go-authentication/handler"
 	pb "github.com/locpham24/go-authentication/proto"
 	"github.com/locpham24/go-authentication/validator"
+	"github.com/micro/cli/v2"
 	"google.golang.org/grpc"
 )
 
@@ -20,9 +22,15 @@ func NewAPIService(db *gorm.DB) APIService {
 	}
 }
 
-func (s APIService) Start() {
+func (s APIService) Start(ctx *cli.Context) {
+	port := ctx.String("port")
+	if port == "" {
+		port = "7000"
+	}
+
+	fmt.Printf("Connect to server at :%s\n", port)
 	// 1. Connect to server at TCP port
-	conn, _ := grpc.Dial("localhost:50051", grpc.WithInsecure())
+	conn, _ := grpc.Dial(fmt.Sprintf("localhost:%s", port), grpc.WithInsecure())
 	// 2. New client
 	client := pb.NewAuthServiceClient(conn)
 

@@ -34,7 +34,8 @@ func (a AuthHandler) register(c *gin.Context) {
 		return
 	}
 
-	req := pb.RegisterReq{
+	// Call to gRPC server
+	req := pb.RegisterRequest{
 		Username: input.Username,
 		Password: input.Password,
 	}
@@ -124,19 +125,10 @@ func (a AuthHandler) login(c *gin.Context) {
 
 func (a AuthHandler) refresh(c *gin.Context) {
 	tokenString := c.Request.Header.Get("authorization")
-	if tokenString == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"code":    401,
-			"message": "user needs to be signed in to access this service",
-		})
-		c.Abort()
-		return
+	req := &pb.AccessToken{
+		Token: tokenString,
 	}
-
-	// 2. Validate token
-	token, err := jwt.ParseWithClaims(tokenString, &model.Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(os.Getenv("SECRET_KEY")), nil
-	})
+	res, err := a.client.Refresh(context.TODO(), req)
 	if err != nil {
 		if err == jwt.ErrSignatureInvalid {
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -150,39 +142,6 @@ func (a AuthHandler) refresh(c *gin.Context) {
 		})
 		return
 	}
-	if !token.Valid {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":    401,
-			"message": "token is invalid",
-		})
-		return
-	}
 
-	if claims, ok := token.Claims.(*model.Claims); ok {
-		if time.Unix(claims.ExpiresAt, 0).Sub(time.Now()) > 240*time.Second {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"code":    401,
-				"message": "too soon to refresh token",
-			})
-			return
-		}
-
-		tokenTTL, _ := strconv.Atoi(os.Getenv("TOKEN_TTL"))
-
-		expirationTime := time.Now().Add(time.Duration(tokenTTL) * time.Minute)
-		claims.ExpiresAt = expirationTime.Unix()
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"code":    401,
-				"message": err.Error(),
-			})
-			return
-		}
-		c.JSON(200, tokenString)
-		return
-	}
-
-	c.JSON(200, nil)
+	c.JSON(200, res.Token)
 }

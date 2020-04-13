@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/micro/cli/v2"
 	"golang.org/x/crypto/bcrypt"
-	"google.golang.org/grpc/reflection"
 	"net"
+	"os"
+	"strconv"
+	"time"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
@@ -27,7 +31,7 @@ func NewAuthService(db *gorm.DB) authService {
 	}
 }
 
-func (a *authService) Register(ctx context.Context, req *pb.RegisterReq) (*pb.User, error) {
+func (a *authService) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.User, error) {
 	input := model.UserForm{
 		Username: req.Username,
 		Password: req.Password,
@@ -71,7 +75,7 @@ func (a *authService) Register(ctx context.Context, req *pb.RegisterReq) (*pb.Us
 	return res, nil
 }
 
-func (a *authService) Login(ctx context.Context, req *pb.LoginReq) (*pb.LoginRes, error) {
+func (a *authService) Login(ctx context.Context, req *pb.LoginRequest) (*pb.AccessToken, error) {
 	return nil, nil
 }
 
@@ -79,17 +83,59 @@ func (a *authService) Verify(ctx context.Context, req *pb.AccessToken) (*pb.User
 	return nil, nil
 }
 
-func (s authService) Start() {
+func (a *authService) Refresh(ctx context.Context, req *pb.AccessToken) (*pb.AccessToken, error) {
+	tokenString := req.Token
+	if tokenString == "" {
+		return nil, errors.New("user needs to be signed in to access this service")
+	}
+
+	// 2. Validate token
+	token, err := jwt.ParseWithClaims(tokenString, &model.Claims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(os.Getenv("SECRET_KEY")), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !token.Valid {
+		return nil, errors.New("token is invalid")
+	}
+
+	if claims, ok := token.Claims.(*model.Claims); ok {
+		if time.Unix(claims.ExpiresAt, 0).Sub(time.Now()) > 240*time.Second {
+			return nil, errors.New("too soon to refresh token")
+		}
+
+		tokenTTL, _ := strconv.Atoi(os.Getenv("TOKEN_TTL"))
+
+		expirationTime := time.Now().Add(time.Duration(tokenTTL) * time.Minute)
+		claims.ExpiresAt = expirationTime.Unix()
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
+		if err != nil {
+			return nil, err
+		}
+
+		res := &pb.AccessToken{Token: tokenString}
+		return res, nil
+	}
+
+	return nil, errors.New("can not refresh token")
+}
+
+func (a authService) Start(ctx *cli.Context) {
+	port := ctx.String("port")
+	if port == "" {
+		port = "7000"
+	}
 	// 1. Listen/Open a TPC connect at port
-	lis, _ := net.Listen("tcp", ":50051")
+	listen, _ := net.Listen("tcp", ":"+port)
 	// 2. Tao server tu GRP
 	grpcServer := grpc.NewServer()
 	// 3. Map service to server
 	pb.RegisterAuthServiceServer(grpcServer, &authService{
-		DB: s.DB,
+		DB: a.DB,
 	})
-	// 4. Binding port
-	reflection.Register(grpcServer)
-	fmt.Println("Start service")
-	grpcServer.Serve(lis)
+
+	fmt.Printf("Starting gRPC server at :%s .....", port)
+	grpcServer.Serve(listen)
 }
